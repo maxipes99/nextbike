@@ -4,97 +4,100 @@
   <meta charset="UTF-8">
   <title>Mapa stanic Nextbike</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Načtení Leaflet CSS -->
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
-    #map {
-      height: 660px;
-    }
+    #map { height: 660px; }
   </style>
 </head>
 <body>
-  <h1>Mapa stanic Nextbike</h1>
+ <h1>Albrechtice nad Orlicí - Týniště nad Orlicí - Mapa stanic Nextbike</h1>
   <div id="map"></div>
 
-  <!-- Načtení Leaflet JS -->
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // Inicializace mapy a nastavení dlaždic z OpenStreetMap
-    var map = L.map('map').setView([50.14837960143762, 16.06819474087627], 15);
+    // 1) Inicializace mapy
+    const map = L.map('map').setView([50.14837960143762, 16.06819474087627], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // Vytvoříme layer group, do kterého budeme přidávat markery
-    var markersLayer = L.layerGroup().addTo(map);
+    // 2) Vrstva pro markery
+    const markersLayer = L.layerGroup().addTo(map);
 
-    // Funkce pro načtení dat a vykreslení markerů
+    // 3) Funkce pro načtení a vykreslení dat
     function updateData() {
-      fetch("https://api.nextbike.net/maps/nextbike-live.json?city=1140")
-        .then(response => response.json())
+      fetch('https://api.nextbike.net/maps/nextbike-live.json?city=1140')
+        .then(res => res.json())
         .then(data => {
-          // Vyčistíme staré markery
           markersLayer.clearLayers();
 
-          var stations = [];
-          if (data.countries) {
-            data.countries.forEach(function(country) {
-              if (country.cities) {
-                country.cities.forEach(function(city) {
-                  if (city.places) {
-                    city.places.forEach(function(place) {
-                      stations.push({
-                        name: place.name,
-                        lat: place.lat,
-                        lng: place.lng,
-                        bikes: place.bikes ? place.bikes : 0,
-                        free_racks: place.free_racks ? place.free_racks : 0
-                      });
-                    });
-                  }
+          data.countries?.forEach(country => {
+            country.cities?.forEach(city => {
+              city.places?.forEach(place => {
+                const name = (place.name || '').trim();
+                const bikes = place.bikes || 0;
+                const freeRacks = place.free_racks || 0;
+                const lat = place.lat;
+                const lng = place.lng;
+
+                // 4) Detekce "BIKE <číslo>" (case-insensitive)
+                const isBikeOutside = /^bike \d+/i.test(name);
+
+                // 5) Výběr ikonky podle stavu
+                let iconUrl;
+                if (isBikeOutside) {
+                  iconUrl = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-yellow.png';
+                } else if (bikes > 0) {
+                  iconUrl = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png';
+                } else {
+                  iconUrl = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-grey.png';
+                }
+
+                // 6) Sestavení vlastního divIcon s labelem počtu kol
+                const iconHtml = `
+                  <div style="display:flex; align-items:center;">
+                    <img src="${iconUrl}" style="width:25px; height:41px;" />
+                    <div style="
+                      background: green;
+                      color: white;
+                      padding: 1px 4px;
+                      margin-left: 0;
+                      border-radius: 3px;
+                      font-weight: bold;
+                      font-size: 11px;
+                      position: relative;
+                      top: 8px;
+                    ">
+                      ${bikes}
+                    </div>
+                  </div>`;
+
+                const customIcon = L.divIcon({
+                  html: iconHtml,
+                  iconAnchor: [12.5, 41],
+                  popupAnchor: [0, -41],
+                  className: ''
                 });
-              }
+
+                // 7) Přidání markeru
+                L.marker([lat, lng], { icon: customIcon })
+                  .bindPopup(`
+                    <b>${name}</b><br>
+                    Volná kola: ${bikes}
+                  `)
+                  .addTo(markersLayer);
+              });
             });
-          }
-
-          // Vykreslíme každý marker s vlastním divIcon, který obsahuje ikonu stanice a label s počtem kol
-          stations.forEach(function(station) {
-            // Určíme URL ikonky - červená pro stanice s koly, šedá pro bezkolové stanice
-            var iconUrl = station.bikes > 0 
-              ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png'
-              : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-grey.png';
-
-            // Vytvoříme HTML strukturu: flex kontejner s obrázkem a label vedle něj
-            var iconHtml = '<div style="display: flex; align-items: center;">' +
-                             '<img src="' + iconUrl + '" style="width: 25px; height: 41px;" />' +
-                             '<div style="background: green; color: white; padding: 1px 4px; margin-left: 0px; border-radius: 3px; font-weight: bold; font-size: 11px; position: relative; top: 8px;">' +
-                               station.bikes +
-                             '</div>' +
-                           '</div>';
-
-            var customIcon = L.divIcon({
-              html: iconHtml,
-              iconAnchor: [12.5, 41],
-              popupAnchor: [0, -41],
-              className: '' // odstraníme defaultní třídy
-            });
-
-            // Přidáme marker do layer group
-            var marker = L.marker([station.lat, station.lng], {icon: customIcon}).addTo(markersLayer);
-            var popupContent = "<b>" + station.name + "</b><br>" +
-                               "Volná kola: " + station.bikes + "<br>" +
-                               "Volné stojany: " + station.free_racks;
-            marker.bindPopup(popupContent);
           });
         })
-        .catch(error => console.error('Chyba při načítání dat:', error));
+        .catch(err => console.error('Chyba při načítání dat:', err));
     }
 
-    // První načtení dat při spuštění stránky
+    // 8) Spuštění a opakování každých 60 s
     updateData();
-
-    // Nastavení automatické aktualizace dat každých 60 sekund (60000 ms)
     setInterval(updateData, 60000);
   </script>
 </body>
